@@ -11,7 +11,7 @@
 	- README.md
 - For the future...
 	- LICENSE
-	- Build.zip
+	- Build.zip (It's impossible to upload the Build because is necessary configure the LFS of GIT)
 	- screenshot Android
 
 - Versions:
