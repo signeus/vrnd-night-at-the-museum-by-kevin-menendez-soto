@@ -18,8 +18,8 @@
 	- GVR Unity SDK: **v1.100.1**
 	- Unity: **2017.4.4f1**
 
-- Post-Mortem
-	- [Document](https://medium.com/@mamesoke/night-at-the-museum-udacity-vr-developer-nanodegree-project-5-7c0205c067ad)
+- Post-Mortem / Write-up
+	- [Document / Write-up](https://medium.com/@mamesoke/night-at-the-museum-udacity-vr-developer-nanodegree-project-5-7c0205c067ad)
 	
 - How to init:
 	- Please import the project in Unity
