@@ -65,7 +65,10 @@ public class Waypoint : MonoBehaviour
 
 	void Update()
 	{
-		bool occupied 	= Camera.main.transform.position == gameObject.transform.position;
+        //bool occupied 	= Camera.main.transform.position == gameObject.transform.position;
+
+        bool occupied = GameObject.FindGameObjectWithTag("Player").transform.position == gameObject.transform.position;
+
         //Added some code to determine distance from camera and hide waypoints with distance greater  
         //than 'threshold' value
 
@@ -140,7 +143,7 @@ public class Waypoint : MonoBehaviour
 		
 		_audio_source.Play();
 
-		Camera.main.transform.position 	= gameObject.transform.position;
+        GameObject.FindGameObjectWithTag("Player").transform.position 	= gameObject.transform.position;
 	}
 
 

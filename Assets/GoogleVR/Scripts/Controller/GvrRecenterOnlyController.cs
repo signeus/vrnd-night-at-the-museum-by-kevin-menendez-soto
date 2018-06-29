@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The controller is not available for versions of Unity without the
+// GVR native integration.
+
 using UnityEngine;
+
+#if UNITY_HAS_GOOGLEVR
 using UnityEngine.VR;
+#endif  // UNITY_HAS_GOOGLEVR
 
 // Recenter only the controller.
 // Usage: Set GvrControllerPointer > Controller as the pointer field, and
 // the camera to recenter (e.g. Main Camera).
 public class GvrRecenterOnlyController : MonoBehaviour {
-  private Quaternion yawCorrection = Quaternion.identity;
+#if UNITY_HAS_GOOGLEVR && (UNITY_ANDROID || UNITY_EDITOR)
+  private Quaternion recenteringOffset = Quaternion.identity;
 
   [Tooltip("The controller to recenter")]
   public GameObject pointer;
@@ -35,43 +42,32 @@ public class GvrRecenterOnlyController : MonoBehaviour {
 
   void Update() {
     if (cam == null || pointer == null
-       || GvrControllerInput.State != GvrConnectionState.Connected) {
-      return;
-    }
-    // Daydream is loaded only on deivce, not in editor.
-#if UNITY_ANDROID && !UNITY_EDITOR
-        if (VRSettings.loadedDeviceName != "daydream")
-        {
-            return;
-        }
-#endif
-    if (GvrControllerInput.Recentered) {
-      pointer.transform.rotation = yawCorrection;
-      cam.transform.parent.rotation = yawCorrection;
+        || UnityEngine.XR.XRSettings.loadedDeviceName != "daydream"
+        || GvrController.State != GvrConnectionState.Connected) {
       return;
     }
 
-#if UNITY_EDITOR
-    // Compatibility for Instant Preview.
-    if (Gvr.Internal.InstantPreview.Instance != null &&
-      Gvr.Internal.InstantPreview.Instance.enabled &&
-      (GvrControllerInput.HomeButtonDown || GvrControllerInput.HomeButtonState)) {
+    if (GvrController.Recentered) {
+      pointer.transform.rotation = recenteringOffset;
+      cam.transform.parent.rotation = recenteringOffset;
       return;
     }
-#else  // !UNITY_EDITOR
-    if (GvrControllerInput.HomeButtonDown || GvrControllerInput.HomeButtonState) {
+
+#if !UNITY_EDITOR
+    if (GvrController.HomeButtonDown || GvrController.HomeButtonState) {
       return;
     }
-#endif  // UNITY_EDITOR
-    yawCorrection = Quaternion.Euler(0, cam.transform.rotation.eulerAngles.y, 0);
+#endif  // !UNITY_EDITOR
+    recenteringOffset = Quaternion.Euler(0, cam.transform.rotation.eulerAngles.y, 0);
   }
 
   void OnDisable() {
-    yawCorrection = Quaternion.identity;
+    recenteringOffset = Quaternion.identity;
     if (cam != null && pointer != null) {
-      pointer.transform.rotation = yawCorrection;
-      cam.transform.parent.rotation = yawCorrection;
+      pointer.transform.rotation = recenteringOffset;
+      cam.transform.parent.rotation = recenteringOffset;
     }
   }
 
+#endif  // UNITY_HAS_GOOGLEVR && (UNITY_ANDROID || UNITY_EDITOR)
 }

@@ -27,8 +27,13 @@
 - References:
 	- Sounds
 		- Waypoint - Udacity Waypoints Tutorial
+	- Textures
+		- [18 High Resolution Wall Textures / A dog's life software - Assets Store Unity](https://assetstore.unity.com/packages/2d/textures-materials/brick/18-high-resolution-wall-textures-12567)
 	- Models
 		- [Unity - Assets Store Unity](https://assetstore.unity.com/)
+		- [Bag Chair / ANATOLIY M. - Assets Store Unity](https://assetstore.unity.com/packages/3d/props/furniture/bag-chair-27956)
+		- Modern Furniture / - Assets Store Unity
+		- PBR Lamps Pack Free / - Assets Store Unity
 	- Pictures
 		- [WikiMedia Commons](https://commons.wikimedia.org/)
 	- Videos

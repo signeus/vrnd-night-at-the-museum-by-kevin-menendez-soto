@@ -27,18 +27,10 @@ public class GvrPointerScrollInput {
   public const string PROPERTY_NAME_DECELERATION_RATE = "decelerationRate";
 
   private class ScrollInfo {
-    public bool isScrollingX = false;
-    public bool isScrollingY = false;
+    public bool isScrolling = false;
     public Vector2 initScroll = Vector2.zero;
     public Vector2 lastScroll = Vector2.zero;
     public Vector2 scrollVelocity = Vector2.zero;
-    public IGvrScrollSettings scrollSettings = null;
-
-    public bool IsScrolling {
-      get {
-        return isScrollingX || isScrollingY;
-      }
-    }
   }
 
   /// Inertia means that scroll events will continue for a while after the user stops
@@ -47,7 +39,7 @@ public class GvrPointerScrollInput {
   public bool inertia = true;
 
   /// The deceleration rate is the speed reduction per second.
-  /// A value of 0.5 halves the speed each second. The default is 0.05.
+  /// A value of 0.5 halves the speed each second. The default is 0.135.
   /// The deceleration rate is only used when inertia is enabled.
   [Tooltip("The rate at which movement slows down.")]
   public float decelerationRate = 0.05f;
@@ -71,37 +63,43 @@ public class GvrPointerScrollInput {
   private List<GameObject> scrollingObjects = new List<GameObject>();
 
   public void HandleScroll(GameObject currentGameObject, PointerEventData pointerData,
-    GvrBasePointer pointer, IGvrEventExecutor eventExecutor) {
+    bool isPointerActiveAndAvailable) {
     bool touchDown = false;
     bool touching = false;
     bool touchUp = false;
     Vector2 currentScroll = Vector2.zero;
 
-    if (pointer != null && pointer.IsAvailable) {
-      touchDown = pointer.TouchDown;
-      touching = pointer.IsTouching;
-      touchUp = pointer.TouchUp;
-      currentScroll = pointer.TouchPos * SCROLL_DELTA_MULTIPLIER;
+#if UNITY_HAS_GOOGLEVR && (UNITY_ANDROID || UNITY_EDITOR)
+    touchDown |= GvrController.TouchDown;
+    touching |= GvrController.IsTouching;
+    touchUp |= GvrController.TouchUp;
+    currentScroll = GvrController.TouchPos * SCROLL_DELTA_MULTIPLIER;
+#endif  // UNITY_HAS_GOOGLEVR && (UNITY_ANDROID || UNITY_EDITOR)
+
+    if (!isPointerActiveAndAvailable) {
+      touchDown = false;
+      touching = false;
+      touchUp = false;
     }
 
-    GameObject currentScrollHandler = eventExecutor.GetEventHandler<IScrollHandler>(currentGameObject);
+    GameObject currentScrollHandler = ExecuteEvents.GetEventHandler<IScrollHandler>(currentGameObject);
 
     if (touchDown) {
       RemoveScrollHandler(currentScrollHandler);
     }
 
     if (currentScrollHandler != null && (touchDown || touching)) {
-      OnTouchingScrollHandler(currentScrollHandler, pointerData, currentScroll, eventExecutor);
+      OnTouchingScrollHandler(currentScrollHandler, pointerData, currentScroll);
     } else if (touchUp && currentScrollHandler != null) {
       OnReleaseScrollHandler(currentScrollHandler);
     }
 
     StopScrollingIfNecessary(touching, currentScrollHandler);
-    UpdateInertiaScrollHandlers(touching, currentScrollHandler, pointerData, eventExecutor);
+    UpdateInertiaScrollHandlers(touching, currentScrollHandler, pointerData);
   }
 
   private void OnTouchingScrollHandler(GameObject currentScrollHandler, PointerEventData pointerData,
-    Vector2 currentScroll, IGvrEventExecutor eventExecutor) {
+    Vector2 currentScroll) {
     ScrollInfo scrollInfo = null;
     if (!scrollHandlers.ContainsKey(currentScrollHandler)) {
       scrollInfo = AddScrollHandler(currentScrollHandler, currentScroll);
@@ -109,36 +107,19 @@ public class GvrPointerScrollInput {
       scrollInfo = scrollHandlers[currentScrollHandler];
     }
 
-    // Detect if we should start scrolling along the x-axis based on the horizontal slop threshold.
-    if (CanScrollStartX(scrollInfo, currentScroll)) {
-      scrollInfo.isScrollingX = true;
+    // Determine if we should start scrolling this scrollHandler.
+    // This is true if the current scroll is outside of the slop threshold.
+    if (CanScrollStart(scrollInfo, currentScroll)) {
+      scrollInfo.isScrolling = true;
     }
 
-    // Detect if we should start scrolling along the y-axis based on the vertical slop threshold.
-    if (CanScrollStartY(scrollInfo, currentScroll)) {
-      scrollInfo.isScrollingY = true;
-    }
-
-    if (scrollInfo.IsScrolling) {
-      Vector2 clampedScroll = currentScroll;
-      Vector2 clampedLastScroll = scrollInfo.lastScroll;
-      if (!scrollInfo.isScrollingX) {
-        clampedScroll.x = 0.0f;
-        clampedLastScroll.x = 0.0f;
-      }
-
-      if (!scrollInfo.isScrollingY) {
-        clampedScroll.y = 0.0f;
-        clampedLastScroll.y = 0.0f;
-      }
-
-      Vector2 scrollDisplacement = clampedScroll - clampedLastScroll;
-      UpdateVelocity(scrollInfo, scrollDisplacement);
-
-      if (!ShouldUseInertia(scrollInfo)) {
+    if (scrollInfo.isScrolling) {
+      if (inertia) {
+        UpdateVelocity(scrollInfo, currentScroll);
+      } else {
         // If inertia is disabled, then we send scroll events immediately.
-        pointerData.scrollDelta = scrollDisplacement;
-        eventExecutor.ExecuteHierarchy(currentScrollHandler, pointerData, ExecuteEvents.scrollHandler);
+        pointerData.scrollDelta = currentScroll - scrollInfo.lastScroll;
+        ExecuteEvents.ExecuteHierarchy(currentScrollHandler, pointerData, ExecuteEvents.scrollHandler);
         pointerData.scrollDelta = Vector2.zero;
       }
     }
@@ -150,13 +131,14 @@ public class GvrPointerScrollInput {
     // When we touch up, immediately stop scrolling the currentScrollHandler if it's velocity is low.
     ScrollInfo scrollInfo;
     if (scrollHandlers.TryGetValue(currentScrollHandler, out scrollInfo)) {
-      if (!scrollInfo.IsScrolling || scrollInfo.scrollVelocity.sqrMagnitude <= INERTIA_THRESHOLD_SQUARED) {
+      if (!scrollInfo.isScrolling || scrollInfo.scrollVelocity.sqrMagnitude <= INERTIA_THRESHOLD_SQUARED) {
         RemoveScrollHandler(currentScrollHandler);
       }
     }
   }
 
-  private void UpdateVelocity(ScrollInfo scrollInfo, Vector2 scrollDisplacement) {
+  private void UpdateVelocity(ScrollInfo scrollInfo, Vector2 currentScroll) {
+    Vector2 scrollDisplacement = (currentScroll - scrollInfo.lastScroll);
     Vector2 newVelocity = scrollDisplacement / Time.deltaTime;
     float weight = Time.deltaTime / (RC + Time.deltaTime);
     scrollInfo.scrollVelocity = Vector2.Lerp(scrollInfo.scrollVelocity, newVelocity, weight);
@@ -172,17 +154,15 @@ public class GvrPointerScrollInput {
       GameObject scrollHandler = scrollingObjects[i];
       ScrollInfo scrollInfo = scrollHandlers[scrollHandler];
 
-      bool isScrollling = scrollInfo.IsScrolling;
+      bool isScrollling = scrollInfo.isScrolling;
 
       bool isVelocityBelowThreshold =
         isScrollling && scrollInfo.scrollVelocity.sqrMagnitude <= SPEED_CLAMP_SQUARED;
 
       bool isCurrentlyTouching = touching && scrollHandler == currentScrollHandler;
 
-      bool shouldUseInertia = ShouldUseInertia(scrollInfo);
-
-      bool shouldStopScrolling = isVelocityBelowThreshold
-        || ((!shouldUseInertia || !isScrollling) && !isCurrentlyTouching);
+      bool shouldStopScrolling = (inertia && isVelocityBelowThreshold)
+        || ((!inertia || !isScrollling) && !isCurrentlyTouching);
 
       if (shouldStopScrolling) {
         RemoveScrollHandler(scrollHandler);
@@ -191,8 +171,8 @@ public class GvrPointerScrollInput {
   }
 
   private void UpdateInertiaScrollHandlers(bool touching, GameObject currentScrollHandler,
-    PointerEventData pointerData, IGvrEventExecutor eventExecutor) {
-    if (pointerData == null) {
+    PointerEventData pointerData) {
+    if (!inertia || pointerData == null) {
       return;
     }
 
@@ -203,20 +183,15 @@ public class GvrPointerScrollInput {
       GameObject scrollHandler = scrollingObjects[i];
       ScrollInfo scrollInfo = scrollHandlers[scrollHandler];
 
-      if (!ShouldUseInertia(scrollInfo)) {
-        continue;
-      }
-
-      if (scrollInfo.IsScrolling) {
+      if (scrollInfo.isScrolling) {
         // Decelerate the scrollHandler if necessary.
         if (!touching || scrollHandler != currentScrollHandler) {
-          float finalDecelerationRate = GetDecelerationRate(scrollInfo);
-          scrollInfo.scrollVelocity *= Mathf.Pow(finalDecelerationRate, Time.deltaTime);
+          scrollInfo.scrollVelocity *= Mathf.Pow(decelerationRate, Time.deltaTime);
         }
 
         // Send the scroll events.
         pointerData.scrollDelta = scrollInfo.scrollVelocity * Time.deltaTime;
-        eventExecutor.ExecuteHierarchy(scrollHandler, pointerData, ExecuteEvents.scrollHandler);
+        ExecuteEvents.ExecuteHierarchy(scrollHandler, pointerData, ExecuteEvents.scrollHandler);
       }
     }
     pointerData.scrollDelta = Vector2.zero;
@@ -226,7 +201,6 @@ public class GvrPointerScrollInput {
     ScrollInfo scrollInfo = new ScrollInfo();
     scrollInfo.initScroll = currentScroll;
     scrollInfo.lastScroll = currentScroll;
-    scrollInfo.scrollSettings = scrollHandler.GetComponent<IGvrScrollSettings>();
     scrollHandlers[scrollHandler] = scrollInfo;
     scrollingObjects.Add(scrollHandler);
     return scrollInfo;
@@ -249,35 +223,12 @@ public class GvrPointerScrollInput {
     scrollingObjects.Remove(scrollHandler);
   }
 
-  private bool ShouldUseInertia(ScrollInfo scrollInfo) {
-    if (scrollInfo != null && scrollInfo.scrollSettings != null) {
-      return scrollInfo.scrollSettings.InertiaOverride;
-    }
-
-    return inertia;
-  }
-
-  private float GetDecelerationRate(ScrollInfo scrollInfo) {
-    if (scrollInfo != null && scrollInfo.scrollSettings != null) {
-      return scrollInfo.scrollSettings.DecelerationRateOverride;
-    }
-
-    return decelerationRate;
-  }
-
-  private static bool CanScrollStartX(ScrollInfo scrollInfo, Vector2 currentScroll) {
+  private static bool CanScrollStart(ScrollInfo scrollInfo, Vector2 currentScroll) {
     if (scrollInfo == null) {
       return false;
     }
 
-    return Mathf.Abs(currentScroll.x - scrollInfo.initScroll.x) >= SLOP_HORIZONTAL;
-  }
-
-  private static bool CanScrollStartY(ScrollInfo scrollInfo, Vector2 currentScroll) {
-    if (scrollInfo == null) {
-      return false;
-    }
-
-    return Mathf.Abs(currentScroll.y - scrollInfo.initScroll.y) >= SLOP_VERTICAL;
+    return (Mathf.Abs(currentScroll.x - scrollInfo.initScroll.x) >= SLOP_HORIZONTAL)
+      || (Mathf.Abs(currentScroll.y - scrollInfo.initScroll.y) >= SLOP_VERTICAL);
   }
 }

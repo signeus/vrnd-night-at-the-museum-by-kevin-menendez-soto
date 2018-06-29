@@ -1,10 +1,9 @@
 ﻿// Copyright 2017 Google Inc. All rights reserved.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Licensed under the MIT License, you may not use this file except in
+// compliance with the License. You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.opensource.org/licenses/mit-license.php
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -31,20 +30,19 @@ public class GvrAllEventsTrigger : MonoBehaviour {
   public TriggerEvent OnPointerUp;
   public TriggerEvent OnPointerEnter;
   public TriggerEvent OnPointerExit;
-  public TriggerEvent OnScroll;
-
-  private bool listenersAdded;
 
   void OnEnable() {
-    AddListeners();
+    // EventExecutor isn't available until after the first update.
+    // So we must wait to add the listeners.
+    StartCoroutine(AddListenersDelayed());
   }
 
   void OnDisable() {
     RemoveListeners();
   }
 
-  void Start() {
-    // The eventExecutor may not be available during OnEnable when the script is first created.
+  private IEnumerator AddListenersDelayed() {
+    yield return null;
     AddListeners();
   }
 
@@ -54,18 +52,11 @@ public class GvrAllEventsTrigger : MonoBehaviour {
       return;
     }
 
-    if (listenersAdded) {
-      return;
-    }
-
     eventExecutor.OnPointerClick += OnPointerClickHandler;
     eventExecutor.OnPointerDown += OnPointerDownHandler;
     eventExecutor.OnPointerUp += OnPointerUpHandler;
     eventExecutor.OnPointerEnter += OnPointerEnterHandler;
     eventExecutor.OnPointerExit += OnPointerExitHandler;
-    eventExecutor.OnScroll += OnScrollHandler;
-
-    listenersAdded = true;
   }
 
   private void RemoveListeners() {
@@ -74,18 +65,11 @@ public class GvrAllEventsTrigger : MonoBehaviour {
       return;
     }
 
-    if (!listenersAdded) {
-      return;
-    }
-
     eventExecutor.OnPointerClick -= OnPointerClickHandler;
     eventExecutor.OnPointerDown -= OnPointerDownHandler;
     eventExecutor.OnPointerUp -= OnPointerUpHandler;
     eventExecutor.OnPointerEnter -= OnPointerEnterHandler;
     eventExecutor.OnPointerExit -= OnPointerExitHandler;
-    eventExecutor.OnScroll -= OnScrollHandler;
-
-    listenersAdded = false;
   }
 
   private void OnPointerClickHandler(GameObject target, PointerEventData eventData) {
@@ -106,9 +90,5 @@ public class GvrAllEventsTrigger : MonoBehaviour {
 
   private void OnPointerExitHandler(GameObject target, PointerEventData eventData) {
     OnPointerExit.Invoke(target, eventData);
-  }
-
-  private void OnScrollHandler(GameObject target, PointerEventData eventData) {
-    OnScroll.Invoke(target, eventData);
   }
 }
